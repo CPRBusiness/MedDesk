@@ -1,0 +1,27 @@
+# Build
+build/
+build-*/
+out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+
+# Qt Creator
+*.user
+*.user.*
+CMakeUserPresets.json
+.qtc_clangd/
+
+# Visual Studio
+.vs/
+
+# Fisiere generate prin compilare
+*.obj
+*.pdb
+*.ilk
+*.exe
+
+# Date locale ale aplicatiei
+/patients.json
