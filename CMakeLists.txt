@@ -83,6 +83,8 @@ if(BUILD_TESTING)
         patient.cpp
         patientmanager.h
         patientmanager.cpp
+        patientstorage.h
+        patientstorage.cpp
     )
 
     set_target_properties(MedDeskTests PROPERTIES

@@ -1,6 +1,11 @@
 #include <QTest>
 
 #include "patientmanager.h"
+#include "patientstorage.h"
+
+#include <QByteArray>
+#include <QFile>
+#include <QTemporaryDir>
 
 #include <stdexcept>
 #include <string>
@@ -110,6 +115,168 @@ private slots:
         QVERIFY(!manager.findPatient(patient.getId()).has_value());
 
         QVERIFY(snapshot->getName() == "Ana");
+    }
+    void saveAndLoadPreservesPatientsAndNextId()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+
+        const QString path = directory.filePath("patients.json");
+
+        PatientManager original;
+        const Patient first = original.addPatient("Ana");
+        const Patient second = original.addPatient("Mihai");
+        const Patient third = original.addPatient("Ioana");
+
+        QVERIFY(original.renamePatient(first.getId(), "Ana Popescu"));
+        QVERIFY(original.removePatient(third.getId()));
+
+        PatientStorage::save(path, original.snapshot());
+
+        PatientManager restored;
+        restored.restore(PatientStorage::load(path));
+
+        const auto restoredFirst = restored.findPatient(first.getId());
+        const auto restoredSecond = restored.findPatient(second.getId());
+
+        QVERIFY(restoredFirst.has_value());
+        QVERIFY(restoredSecond.has_value());
+
+        QCOMPARE(restoredFirst->getName(), std::string("Ana Popescu"));
+        QCOMPARE(restoredSecond->getName(), std::string("Mihai"));
+
+        QVERIFY(!restored.findPatient(third.getId()).has_value());
+        QCOMPARE(restored.snapshot().patients.size(), std::size_t{2});
+
+        const Patient next = restored.addPatient("Elena");
+        QCOMPARE(next.getId(), 4);
+    }
+    void emptyListCanBeSavedAndLoaded()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+
+        const QString path = directory.filePath("empty.json");
+
+        PatientManager empty;
+        PatientStorage::save(path, empty.snapshot());
+
+        PatientManager restored;
+        restored.addPatient("Pacient existent");
+
+        restored.restore(PatientStorage::load(path));
+
+        QVERIFY(restored.snapshot().patients.empty());
+
+        const Patient first = restored.addPatient("Ana");
+        QCOMPARE(first.getId(), 1);
+    }
+    void malformedJsonIsRejected()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+
+        const QString path = directory.filePath("invalid.json");
+        const QByteArray data("{ acesta nu este JSON valid");
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(data), data.size());
+        file.close();
+
+        QVERIFY_THROWS_EXCEPTION(
+            std::invalid_argument,
+            PatientStorage::load(path));
+    }
+    void fractionalPatientIdIsRejected()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+
+        const QString path = directory.filePath("fractional.json");
+
+        const QByteArray data = R"json(
+        {
+            "formatVersion": 1,
+            "nextPatientId": 2,
+            "patients": [
+                {
+                    "id": 1.5,
+                    "name": "Ana"
+                }
+            ]
+        }
+    )json";
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(data), data.size());
+        file.close();
+
+        QVERIFY_THROWS_EXCEPTION(
+            std::invalid_argument,
+            PatientStorage::load(path));
+    }
+    void duplicateIdsKeepExistingPatientsUnchanged()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+
+        const QString path = directory.filePath("duplicates.json");
+
+        const QByteArray data = R"json(
+        {
+            "formatVersion": 1,
+            "nextPatientId": 8,
+            "patients": [
+                {
+                    "id": 7,
+                    "name": "Ana"
+                },
+                {
+                    "id": 7,
+                    "name": "Mihai"
+                }
+            ]
+        }
+    )json";
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(data), data.size());
+        file.close();
+
+        PatientManager manager;
+        const Patient existing = manager.addPatient("Pacient existent");
+
+        QVERIFY_THROWS_EXCEPTION(
+            std::invalid_argument,
+            manager.restore(PatientStorage::load(path)));
+
+        const auto preserved = manager.findPatient(existing.getId());
+
+        QVERIFY(preserved.has_value());
+        QCOMPARE(preserved->getName(), std::string("Pacient existent"));
+        QCOMPARE(manager.snapshot().patients.size(), std::size_t{1});
+        QVERIFY(!manager.findPatient(7).has_value());
+
+        const Patient next = manager.addPatient("Elena");
+        QCOMPARE(next.getId(), 2);
+    }
+    void savingToMissingDirectoryIsRejected()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+
+        const QString path =
+            directory.filePath("missing/patients.json");
+
+        PatientManager manager;
+        manager.addPatient("Ana");
+
+        QVERIFY_THROWS_EXCEPTION(
+            std::runtime_error,
+            PatientStorage::save(path, manager.snapshot()));
     }
 };
 
