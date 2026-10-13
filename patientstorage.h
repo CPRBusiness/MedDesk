@@ -11,6 +11,7 @@ public:
     PatientStorage();
 
     static void save(const QString& filePath, const PatientSnapshot& snapshot);
+    static PatientSnapshot load(const QString& filePath);
 };
 
 #endif // PATIENTSTORAGE_H

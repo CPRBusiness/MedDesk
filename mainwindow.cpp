@@ -3,6 +3,7 @@
 #include "patientstorage.h"
 #include <algorithm>
 #include <stdexcept>
+#include <utility>
 #include <QMessageBox>
 #include <QString>
 #include <QListWidgetItem>
@@ -42,6 +43,25 @@ void MainWindow::filterPatients(const QString& text){
     }
 }
 
+void MainWindow::refreshPatientsList(){
+    const PatientSnapshot snapshot = patientManager_.snapshot();
+
+    ui->patientList->clear();
+
+    for(const Patient& patient : snapshot.patients){
+        const QString label = QString("%1 - %2")
+                                  .arg(patient.getId())
+                                  .arg(QString::fromStdString(patient.getName()));
+
+        auto* item = new QListWidgetItem(label);
+        item->setData(Qt::UserRole, patient.getId());
+
+        ui->patientList->addItem(item);
+    }
+
+    filterPatients(ui->searchPatientEdit->text());
+}
+
 void MainWindow::on_aboutButton_clicked()
 {
     QMessageBox::information(
@@ -72,7 +92,7 @@ void MainWindow::on_addPatientButton_clicked()
 
         filterPatients(ui->searchPatientEdit->text());
     }
-    catch (const std::invalid_argument& error){
+    catch (const std::exception& error){
         QMessageBox::warning(
             this,
             "Date incomplete",
@@ -215,3 +235,46 @@ void MainWindow::on_savePatientsButton_clicked()
     }
 }
 
+
+void MainWindow::on_loadPatientsButton_clicked()
+{
+    const QString filePath = QFileDialog::getOpenFileName(
+        this,
+        "Incarca pacientii",
+        "",
+        "Fisiere JSON (*.json)");
+
+    if(filePath.isEmpty()){
+        return;
+    }
+
+    const auto answer = QMessageBox::question(
+        this,
+        "Incarcare pacienti",
+        "Lista actuala va fi inlocuita cu datele din fisier."
+        "Continui?",
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if(answer != QMessageBox::Yes){
+        return;
+    }
+
+    try{
+        PatientSnapshot snapshot = PatientStorage::load(filePath);
+
+        patientManager_.restore(std::move(snapshot));
+        refreshPatientsList();
+
+        QMessageBox::information(
+            this,
+            "Incarcare reusita",
+            "Pacientii au fost incarcati.");
+    }
+    catch (const std::exception& error){
+        QMessageBox::critical(
+            this,
+            "Eroare la incarcare",
+            QString::fromUtf8(error.what()));
+    }
+}

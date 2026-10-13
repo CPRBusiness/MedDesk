@@ -23,6 +23,7 @@ public:
     bool renamePatient(int id, const std::string& name);
     bool removePatient(int id);
     PatientSnapshot snapshot() const;
+    void restore(PatientSnapshot snapshot);
 
 private:
     static void validateName(const std::string& name);
