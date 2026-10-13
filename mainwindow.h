@@ -30,6 +30,8 @@ private slots:
 
     void on_searchPatientEdit_textChanged(const QString &text);
 
+    void on_savePatientsButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     PatientManager patientManager_;

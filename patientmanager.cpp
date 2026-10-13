@@ -73,3 +73,7 @@ bool PatientManager::removePatient(int id)
     patients_.erase(it);
     return true;
 }
+
+PatientSnapshot PatientManager:: snapshot() const{
+    return {patients_, nextPatientId_};
+}

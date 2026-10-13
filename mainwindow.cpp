@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
+#include "patientstorage.h"
 #include <algorithm>
 #include <stdexcept>
 #include <QMessageBox>
@@ -8,6 +9,7 @@
 #include <QVariant>
 #include <QInputDialog>
 #include <QLineEdit>
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -181,5 +183,35 @@ void MainWindow::on_editPatientButton_clicked()
 void MainWindow::on_searchPatientEdit_textChanged(const QString& text)
 {
     filterPatients(text);
+}
+
+
+void MainWindow::on_savePatientsButton_clicked()
+{
+    const QString filePath = QFileDialog::getSaveFileName(
+        this,
+        "Salveaza pacientii",
+        "patients.json",
+        "Fisiere JSON (*.json)");
+
+    if(filePath.isEmpty()){
+        return;
+    }
+    try{
+        const PatientSnapshot snapshot = patientManager_.snapshot();
+
+        PatientStorage::save(filePath, snapshot);
+
+        QMessageBox::information(
+            this,
+            "Salvare reusita",
+            "Pacientii au fost salvati.");
+    }
+    catch (const std::exception& error){
+        QMessageBox::critical(
+            this,
+            "Eroare la salvare",
+            QString::fromUtf8(error.what()));
+    }
 }
 

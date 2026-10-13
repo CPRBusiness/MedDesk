@@ -54,6 +54,13 @@
      </widget>
     </item>
     <item>
+     <widget class="QPushButton" name="savePatientsButton">
+      <property name="text">
+       <string>Salveaza pacientii</string>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QPushButton" name="aboutButton">
       <property name="text">
        <string>Despre aplicatie</string>
