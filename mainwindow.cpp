@@ -218,6 +218,8 @@ void MainWindow::on_loadPatientsButton_clicked()
         PatientSnapshot snapshot = PatientStorage::load(filePath);
 
         patientManager_.restore(std::move(snapshot));
+
+        currentFilePath_ = filePath;
         setUnsavedChanges(false);
         refreshPatientsList();
 
@@ -256,11 +258,7 @@ std::optional<int> MainWindow::selectedPatientId() const{
 void MainWindow::setUnsavedChanges(bool modified)
 {
     hasUnsavedChanges_ = modified;
-
-    const QString marker = modified ? " *" : "";
-
-    setWindowTitle(
-        QString("MedDesk - Gestionare pacienti%1").arg(marker));
+    updateWindowTitle();
 }
 
 bool MainWindow::confirmPendingChanges()
@@ -306,10 +304,24 @@ void MainWindow::closeEvent(QCloseEvent* event)
 
 bool MainWindow::savePatients()
 {
+    if (currentFilePath_.isEmpty())
+    {
+        return savePatientsAs();
+    }
+
+    return writePatientsToFile(currentFilePath_);
+}
+
+bool MainWindow::savePatientsAs()
+{
+    const QString suggestedPath = currentFilePath_.isEmpty()
+    ? QStringLiteral("patients.json")
+    : currentFilePath_;
+
     const QString filePath = QFileDialog::getSaveFileName(
         this,
-        "Salveaza pacientii",
-        "patients.json",
+        "Salveaza pacientii ca",
+        suggestedPath,
         "Fisiere JSON (*.json)");
 
     if (filePath.isEmpty())
@@ -317,6 +329,11 @@ bool MainWindow::savePatients()
         return false;
     }
 
+    return writePatientsToFile(filePath);
+}
+
+bool MainWindow::writePatientsToFile(const QString& filePath)
+{
     try
     {
         const PatientSnapshot snapshot =
@@ -324,12 +341,8 @@ bool MainWindow::savePatients()
 
         PatientStorage::save(filePath, snapshot);
 
+        currentFilePath_ = filePath;
         setUnsavedChanges(false);
-
-        QMessageBox::information(
-            this,
-            "Salvare reusita",
-            "Pacientii au fost salvati.");
 
         return true;
     }
@@ -342,4 +355,21 @@ bool MainWindow::savePatients()
 
         return false;
     }
+}
+
+void MainWindow::updateWindowTitle()
+{
+    const QString fileName = currentFilePath_.isEmpty()
+    ? QStringLiteral("Fara nume")
+    : QFileInfo(currentFilePath_).fileName();
+
+    const QString marker = hasUnsavedChanges_ ? " *" : "";
+
+    setWindowTitle(
+        QString("MedDesk - %1%2").arg(fileName, marker));
+}
+
+void MainWindow::on_savePatientsAsButton_clicked()
+{
+    savePatientsAs();
 }

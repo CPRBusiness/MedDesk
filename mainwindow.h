@@ -40,12 +40,15 @@ private slots:
 
     void on_loadPatientsButton_clicked();
 
+    void on_savePatientsAsButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     PatientManager patientManager_;
     PatientTableModel* patientTableModel_ = nullptr;
     QSortFilterProxyModel* patientProxyModel_ = nullptr;
     bool hasUnsavedChanges_ = false;
+    QString currentFilePath_;
 
 
     void refreshPatientsList();
@@ -54,6 +57,9 @@ private:
     void setUnsavedChanges(bool modified);
     bool confirmPendingChanges();
     bool savePatients();
+    bool savePatientsAs();
+    bool writePatientsToFile(const QString& filePath);
+    void updateWindowTitle();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
