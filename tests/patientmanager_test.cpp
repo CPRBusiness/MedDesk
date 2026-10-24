@@ -465,6 +465,26 @@ private slots:
         QCOMPARE(proxy.index(0, 1).data(Qt::UserRole).toInt(), 5);
         QCOMPARE(proxy.index(1, 1).data(Qt::UserRole).toInt(), 3);
     }
+
+    void restoringEmptySnapshotStartsANewList()
+    {
+        PatientManager manager;
+
+        manager.addPatient("Ana");
+        manager.addPatient("Mihai");
+
+        manager.restore(PatientSnapshot{});
+
+        const PatientSnapshot snapshot = manager.snapshot();
+
+        QVERIFY(snapshot.patients.empty());
+        QCOMPARE(snapshot.nextPatientId, 1);
+
+        const Patient first = manager.addPatient("Elena");
+
+        QCOMPARE(first.getId(), 1);
+        QCOMPARE(first.getName(), std::string("Elena"));
+    }
 };
 
 QTEST_APPLESS_MAIN(PatientManagerTest)

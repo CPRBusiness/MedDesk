@@ -3,8 +3,6 @@
 #include "patientstorage.h"
 #include "patienttablemodel.h"
 
-#include <algorithm>
-#include <stdexcept>
 #include <utility>
 #include <QMessageBox>
 #include <QString>
@@ -16,6 +14,8 @@
 #include <QHeaderView>
 #include <QItemSelectionModel>
 #include <QSortFilterProxyModel>
+#include <QCloseEvent>
+#include <QKeySequence>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -46,6 +46,29 @@ MainWindow::MainWindow(QWidget *parent)
     ui->patientsTable->sortByColumn(0, Qt::AscendingOrder);
 
     refreshPatientsList();
+
+    setUnsavedChanges(false);
+
+    ui->newPatientsButton->setShortcut(
+        QKeySequence(QKeySequence::New));
+    ui->newPatientsButton->setToolTip(
+        "Lista noua (Ctrl+N)");
+
+    ui->loadPatientsButton->setShortcut(
+        QKeySequence(QKeySequence::Open));
+    ui->loadPatientsButton->setToolTip(
+        "Incarca pacientii (Ctrl+O)");
+
+    ui->savePatientsButton->setShortcut(
+        QKeySequence(QKeySequence::Save));
+    ui->savePatientsButton->setToolTip(
+        "Salveaza pacientii (Ctrl+S)");
+
+    ui->savePatientsAsButton->setShortcut(
+        QKeySequence(QKeySequence::SaveAs));
+    ui->savePatientsAsButton->setToolTip(
+        "Salveaza ca... (Ctrl+Shift+S)");
+
 }
 
 MainWindow::~MainWindow()
@@ -73,6 +96,7 @@ void MainWindow::on_addPatientButton_clicked()
 
     try{
         patientManager_.addPatient(name.toStdString());
+        setUnsavedChanges(true);
 
         refreshPatientsList();
 
@@ -111,6 +135,8 @@ void MainWindow::on_deletePatientButton_clicked()
         );
         return;
     }
+
+    setUnsavedChanges(true);
 
     refreshPatientsList();
 }
@@ -165,6 +191,10 @@ void MainWindow::on_editPatientButton_clicked()
             return;
         }
 
+        if(name.toStdString() != patient->getName()){
+            setUnsavedChanges(true);
+        }
+
         refreshPatientsList();
     }
     catch (const std::exception& error){
@@ -185,31 +215,7 @@ void MainWindow::on_searchPatientEdit_textChanged(const QString& text)
 
 void MainWindow::on_savePatientsButton_clicked()
 {
-    const QString filePath = QFileDialog::getSaveFileName(
-        this,
-        "Salveaza pacientii",
-        "patients.json",
-        "Fisiere JSON (*.json)");
-
-    if(filePath.isEmpty()){
-        return;
-    }
-    try{
-        const PatientSnapshot snapshot = patientManager_.snapshot();
-
-        PatientStorage::save(filePath, snapshot);
-
-        QMessageBox::information(
-            this,
-            "Salvare reusita",
-            "Pacientii au fost salvati.");
-    }
-    catch (const std::exception& error){
-        QMessageBox::critical(
-            this,
-            "Eroare la salvare",
-            QString::fromUtf8(error.what()));
-    }
+    savePatients();
 }
 
 
@@ -225,15 +231,8 @@ void MainWindow::on_loadPatientsButton_clicked()
         return;
     }
 
-    const auto answer = QMessageBox::question(
-        this,
-        "Incarcare pacienti",
-        "Lista actuala va fi inlocuita cu datele din fisier."
-        "Continui?",
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if(answer != QMessageBox::Yes){
+    if (!confirmPendingChanges())
+    {
         return;
     }
 
@@ -241,6 +240,9 @@ void MainWindow::on_loadPatientsButton_clicked()
         PatientSnapshot snapshot = PatientStorage::load(filePath);
 
         patientManager_.restore(std::move(snapshot));
+
+        currentFilePath_ = filePath;
+        setUnsavedChanges(false);
         refreshPatientsList();
 
         QMessageBox::information(
@@ -274,3 +276,142 @@ std::optional<int> MainWindow::selectedPatientId() const{
 
     return id;
 }
+
+void MainWindow::setUnsavedChanges(bool modified)
+{
+    hasUnsavedChanges_ = modified;
+    updateWindowTitle();
+}
+
+bool MainWindow::confirmPendingChanges()
+{
+    if (!hasUnsavedChanges_)
+    {
+        return true;
+    }
+
+    const auto answer = QMessageBox::warning(
+        this,
+        "Modificari nesalvate",
+        "Exista modificari nesalvate. "
+        "Continui fara sa le salvezi?",
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+
+    switch (answer)
+    {
+    case QMessageBox::Save:
+        return savePatients();
+
+    case QMessageBox::Discard:
+        return true;
+
+    case QMessageBox::Cancel:
+    default:
+        return false;
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (confirmPendingChanges())
+    {
+        event->accept();
+    }
+    else
+    {
+        event->ignore();
+    }
+}
+
+bool MainWindow::savePatients()
+{
+    if (currentFilePath_.isEmpty())
+    {
+        return savePatientsAs();
+    }
+
+    return writePatientsToFile(currentFilePath_);
+}
+
+bool MainWindow::savePatientsAs()
+{
+    const QString suggestedPath = currentFilePath_.isEmpty()
+    ? QStringLiteral("patients.json")
+    : currentFilePath_;
+
+    const QString filePath = QFileDialog::getSaveFileName(
+        this,
+        "Salveaza pacientii ca",
+        suggestedPath,
+        "Fisiere JSON (*.json)");
+
+    if (filePath.isEmpty())
+    {
+        return false;
+    }
+
+    return writePatientsToFile(filePath);
+}
+
+bool MainWindow::writePatientsToFile(const QString& filePath)
+{
+    try
+    {
+        const PatientSnapshot snapshot =
+            patientManager_.snapshot();
+
+        PatientStorage::save(filePath, snapshot);
+
+        currentFilePath_ = filePath;
+        setUnsavedChanges(false);
+
+        return true;
+    }
+    catch (const std::exception& error)
+    {
+        QMessageBox::critical(
+            this,
+            "Eroare la salvare",
+            QString::fromUtf8(error.what()));
+
+        return false;
+    }
+}
+
+void MainWindow::updateWindowTitle()
+{
+    const QString fileName = currentFilePath_.isEmpty()
+    ? QStringLiteral("Fara nume")
+    : QFileInfo(currentFilePath_).fileName();
+
+    const QString marker = hasUnsavedChanges_ ? " *" : "";
+
+    setWindowTitle(
+        QString("MedDesk - %1%2").arg(fileName, marker));
+}
+
+void MainWindow::on_savePatientsAsButton_clicked()
+{
+    savePatientsAs();
+}
+void MainWindow::on_newPatientsButton_clicked()
+{
+    if (!confirmPendingChanges())
+    {
+        return;
+    }
+
+    patientManager_.restore(PatientSnapshot{});
+
+    currentFilePath_.clear();
+
+    ui->patientNameEdit->clear();
+    ui->searchPatientEdit->clear();
+
+    refreshPatientsList();
+    setUnsavedChanges(false);
+
+    ui->patientNameEdit->setFocus();
+}
+
