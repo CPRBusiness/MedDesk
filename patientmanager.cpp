@@ -1,7 +1,9 @@
 #include "patientmanager.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
+#include <unordered_set>
 
 PatientManager::PatientManager() {}
 
@@ -13,6 +15,12 @@ void PatientManager::validateName(const std::string& name){
 
 Patient PatientManager::addPatient(const std::string& name){
     validateName(name);
+
+    if (nextPatientId_ == std::numeric_limits<int>::max())
+    {
+        throw std::overflow_error(
+            "Nu mai sunt disponibile ID-uri pentru pacienti.");
+    }
 
     Patient patient(nextPatientId_, name);
     patients_.push_back(patient);
@@ -72,4 +80,37 @@ bool PatientManager::removePatient(int id)
 
     patients_.erase(it);
     return true;
+}
+
+PatientSnapshot PatientManager:: snapshot() const{
+    return {patients_, nextPatientId_};
+}
+
+void PatientManager::restore(PatientSnapshot snapshot){
+    if(snapshot.nextPatientId < 1){
+        throw std::invalid_argument("Urmatorul ID trebuie sa fie pozitiv.");
+    }
+
+    std::unordered_set<int> ids;
+
+    for(const Patient& patient : snapshot.patients){
+        validateName(patient.getName());
+
+        if(patient.getId() < 1){
+            throw std::invalid_argument("ID-ul pacientului trebuie sa fie pozitiv");
+        }
+
+        if(!ids.insert(patient.getId()).second){
+            throw std::invalid_argument(
+                "Fisierul contine ID-uri duplicate.");
+        }
+
+        if(patient.getId() >= snapshot.nextPatientId){
+            throw std::invalid_argument(
+                "Urmatorul ID trebuie sa fie mai mare decat toate ID-urile existente");
+        }
+    }
+
+    patients_.swap(snapshot.patients);
+    nextPatientId_ = snapshot.nextPatientId;
 }

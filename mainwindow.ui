@@ -16,6 +16,13 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
+     <widget class="QPushButton" name="loadPatientsButton">
+      <property name="text">
+       <string>Incarca pacientii</string>
+      </property>
+     </widget>
+    </item>
+    <item>
      <widget class="QLineEdit" name="patientNameEdit">
       <property name="placeholderText">
        <string>Numele pacientului</string>
@@ -50,6 +57,13 @@
      <widget class="QPushButton" name="deletePatientButton">
       <property name="text">
        <string>Sterge pacient</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="savePatientsButton">
+      <property name="text">
+       <string>Salveaza pacientii</string>
       </property>
      </widget>
     </item>

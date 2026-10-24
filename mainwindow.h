@@ -30,10 +30,15 @@ private slots:
 
     void on_searchPatientEdit_textChanged(const QString &text);
 
+    void on_savePatientsButton_clicked();
+
+    void on_loadPatientsButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     PatientManager patientManager_;
 
     void filterPatients(const QString& text);
+    void refreshPatientsList();
 };
 #endif // MAINWINDOW_H
