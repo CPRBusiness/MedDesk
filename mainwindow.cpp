@@ -3,8 +3,6 @@
 #include "patientstorage.h"
 #include "patienttablemodel.h"
 
-#include <algorithm>
-#include <stdexcept>
 #include <utility>
 #include <QMessageBox>
 #include <QString>
@@ -16,6 +14,7 @@
 #include <QHeaderView>
 #include <QItemSelectionModel>
 #include <QSortFilterProxyModel>
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -46,6 +45,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->patientsTable->sortByColumn(0, Qt::AscendingOrder);
 
     refreshPatientsList();
+
+    setUnsavedChanges(false);
 }
 
 MainWindow::~MainWindow()
@@ -73,6 +74,7 @@ void MainWindow::on_addPatientButton_clicked()
 
     try{
         patientManager_.addPatient(name.toStdString());
+        setUnsavedChanges(true);
 
         refreshPatientsList();
 
@@ -111,6 +113,8 @@ void MainWindow::on_deletePatientButton_clicked()
         );
         return;
     }
+
+    setUnsavedChanges(true);
 
     refreshPatientsList();
 }
@@ -165,6 +169,10 @@ void MainWindow::on_editPatientButton_clicked()
             return;
         }
 
+        if(name.toStdString() != patient->getName()){
+            setUnsavedChanges(true);
+        }
+
         refreshPatientsList();
     }
     catch (const std::exception& error){
@@ -198,6 +206,7 @@ void MainWindow::on_savePatientsButton_clicked()
         const PatientSnapshot snapshot = patientManager_.snapshot();
 
         PatientStorage::save(filePath, snapshot);
+        setUnsavedChanges(false);
 
         QMessageBox::information(
             this,
@@ -225,15 +234,8 @@ void MainWindow::on_loadPatientsButton_clicked()
         return;
     }
 
-    const auto answer = QMessageBox::question(
-        this,
-        "Incarcare pacienti",
-        "Lista actuala va fi inlocuita cu datele din fisier."
-        "Continui?",
-        QMessageBox::Yes | QMessageBox::No,
-        QMessageBox::No);
-
-    if(answer != QMessageBox::Yes){
+    if (!confirmDiscardChanges())
+    {
         return;
     }
 
@@ -241,6 +243,7 @@ void MainWindow::on_loadPatientsButton_clicked()
         PatientSnapshot snapshot = PatientStorage::load(filePath);
 
         patientManager_.restore(std::move(snapshot));
+        setUnsavedChanges(false);
         refreshPatientsList();
 
         QMessageBox::information(
@@ -273,4 +276,44 @@ std::optional<int> MainWindow::selectedPatientId() const{
     }
 
     return id;
+}
+
+void MainWindow::setUnsavedChanges(bool modified)
+{
+    hasUnsavedChanges_ = modified;
+
+    const QString marker = modified ? " *" : "";
+
+    setWindowTitle(
+        QString("MedDesk - Gestionare pacienti%1").arg(marker));
+}
+
+bool MainWindow::confirmDiscardChanges()
+{
+    if (!hasUnsavedChanges_)
+    {
+        return true;
+    }
+
+    const auto answer = QMessageBox::warning(
+        this,
+        "Modificari nesalvate",
+        "Exista modificari nesalvate. "
+        "Continui fara sa le salvezi?",
+        QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+
+    return answer == QMessageBox::Discard;
+}
+
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+    if (confirmDiscardChanges())
+    {
+        event->accept();
+    }
+    else
+    {
+        event->ignore();
+    }
 }

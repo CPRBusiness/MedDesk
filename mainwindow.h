@@ -15,6 +15,7 @@ QT_END_NAMESPACE
 
 class PatientTableModel;
 class QSortFilterProxyModel;
+class QCloseEvent;
 
 class MainWindow : public QMainWindow
 {
@@ -44,10 +45,16 @@ private:
     PatientManager patientManager_;
     PatientTableModel* patientTableModel_ = nullptr;
     QSortFilterProxyModel* patientProxyModel_ = nullptr;
+    bool hasUnsavedChanges_ = false;
 
 
     void refreshPatientsList();
 
     std::optional<int> selectedPatientId() const;
+    void setUnsavedChanges(bool modified);
+    bool confirmDiscardChanges();
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
 };
 #endif // MAINWINDOW_H
