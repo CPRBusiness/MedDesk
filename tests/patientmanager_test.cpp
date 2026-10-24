@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <QSignalSpy>
+#include <QSortFilterProxyModel>
 
 #include <stdexcept>
 #include <string>
@@ -355,6 +356,114 @@ private slots:
 
         QCOMPARE(resetSpy.count(), 2);
         QCOMPARE(model.rowCount(), 0);
+    }
+
+    void sortingPreservesPatientIdentity()
+    {
+        PatientTableModel model;
+        model.setPatients({
+            Patient(10, "Zoe"),
+            Patient(2, "Ana"),
+            Patient(7, "Mihai")
+        });
+
+        QSortFilterProxyModel proxy;
+        proxy.setSourceModel(&model);
+        proxy.setSortCaseSensitivity(Qt::CaseInsensitive);
+
+        proxy.sort(1, Qt::AscendingOrder);
+
+        const QModelIndex firstName = proxy.index(0, 1);
+
+        QCOMPARE(firstName.data().toString(), QString("Ana"));
+        QCOMPARE(firstName.data(Qt::UserRole).toInt(), 2);
+
+        const QModelIndex sourceIndex = proxy.mapToSource(firstName);
+
+        QCOMPARE(sourceIndex.row(), 1);
+        QCOMPARE(sourceIndex.data(Qt::UserRole).toInt(), 2);
+
+        // Verificam ca ID-urile sunt sortate numeric.
+        proxy.sort(0, Qt::AscendingOrder);
+
+        QCOMPARE(proxy.index(0, 0).data().toInt(), 2);
+        QCOMPARE(proxy.index(1, 0).data().toInt(), 7);
+        QCOMPARE(proxy.index(2, 0).data().toInt(), 10);
+
+        // Ordinea modelului sursa ramane aceeasi.
+        QCOMPARE(model.index(0, 0).data().toInt(), 10);
+    }
+
+    void filteringFindsPatientsByNameAndId()
+    {
+        PatientTableModel model;
+        model.setPatients({
+            Patient(10, "Ana Popescu"),
+            Patient(2, "Mihai"),
+            Patient(7, "Ioana")
+        });
+
+        QSortFilterProxyModel proxy;
+        proxy.setSourceModel(&model);
+        proxy.setFilterCaseSensitivity(Qt::CaseInsensitive);
+        proxy.setFilterKeyColumn(-1);
+
+        proxy.setFilterFixedString("POPESCU");
+
+        QCOMPARE(proxy.rowCount(), 1);
+        QCOMPARE(proxy.index(0, 0).data(Qt::UserRole).toInt(), 10);
+
+        proxy.setFilterFixedString("2");
+
+        QCOMPARE(proxy.rowCount(), 1);
+        QCOMPARE(
+            proxy.index(0, 1).data().toString(),
+            QString("Mihai"));
+
+        proxy.setFilterFixedString("inexistent");
+
+        QCOMPARE(proxy.rowCount(), 0);
+
+        proxy.setFilterFixedString("");
+
+        QCOMPARE(proxy.rowCount(), 3);
+    }
+
+    void filterAndSortRemainActiveAfterModelReset()
+    {
+        PatientTableModel model;
+        model.setPatients({
+            Patient(1, "Ana"),
+            Patient(2, "Mihai")
+        });
+
+        QSortFilterProxyModel proxy;
+        proxy.setSourceModel(&model);
+        proxy.setFilterCaseSensitivity(Qt::CaseInsensitive);
+        proxy.setFilterKeyColumn(-1);
+        proxy.setFilterFixedString("ana");
+        proxy.sort(1, Qt::AscendingOrder);
+
+        QCOMPARE(proxy.rowCount(), 1);
+
+        model.setPatients({
+            Patient(3, "Ioana"),
+            Patient(4, "Zoe"),
+            Patient(5, "Ana Maria")
+        });
+
+        QCOMPARE(proxy.rowCount(), 2);
+
+        QCOMPARE(
+            proxy.index(0, 1).data().toString(),
+            QString("Ana Maria"));
+
+        QCOMPARE(
+            proxy.index(1, 1).data().toString(),
+            QString("Ioana"));
+
+        QCOMPARE(proxy.index(0, 1).data(Qt::UserRole).toInt(), 5);
+        QCOMPARE(proxy.index(1, 1).data(Qt::UserRole).toInt(), 3);
     }
 };
 
