@@ -26,6 +26,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         patient.h patient.cpp
         patientmanager.h patientmanager.cpp
         patientstorage.h patientstorage.cpp
+        patienttablemodel.h patienttablemodel.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET MedDesk APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -85,6 +86,8 @@ if(BUILD_TESTING)
         patientmanager.cpp
         patientstorage.h
         patientstorage.cpp
+        patienttablemodel.h
+        patienttablemodel.cpp
     )
 
     set_target_properties(MedDeskTests PROPERTIES

@@ -1,22 +1,51 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
 #include "patientstorage.h"
+#include "patienttablemodel.h"
+
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
 #include <QMessageBox>
 #include <QString>
-#include <QListWidgetItem>
 #include <QVariant>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QFileDialog>
+#include <QAbstractItemView>
+#include <QHeaderView>
+#include <QItemSelectionModel>
+#include <QSortFilterProxyModel>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    patientTableModel_ = new PatientTableModel(this);
+
+    patientProxyModel_ = new QSortFilterProxyModel(this);
+    patientProxyModel_->setSourceModel(patientTableModel_);
+    patientProxyModel_->setFilterCaseSensitivity(Qt::CaseInsensitive);
+    patientProxyModel_->setSortCaseSensitivity(Qt::CaseInsensitive);
+    patientProxyModel_->setFilterKeyColumn(-1);
+
+    ui->patientsTable->setModel(patientProxyModel_);
+
+    ui->patientsTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+
+    ui->patientsTable->setSelectionMode(QAbstractItemView::SingleSelection);
+
+    ui->patientsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    ui->patientsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    ui->patientsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+
+    ui->patientsTable->setSortingEnabled(true);
+    ui->patientsTable->sortByColumn(0, Qt::AscendingOrder);
+
+    refreshPatientsList();
 }
 
 MainWindow::~MainWindow()
@@ -24,42 +53,9 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::filterPatients(const QString& text){
-    const QString query = text.trimmed();
-
-    for(int i = 0; i < ui->patientList->count(); i++){
-        auto* item = ui->patientList->item(i);
-
-        const bool matches = item->text().contains(query, Qt::CaseInsensitive);
-
-        item->setHidden(!matches);
-    }
-
-    auto*current = ui->patientList->currentItem();
-
-    if(current && current->isHidden()){
-        ui->patientList->clearSelection();
-        ui->patientList->setCurrentRow(-1);
-    }
-}
-
 void MainWindow::refreshPatientsList(){
-    const PatientSnapshot snapshot = patientManager_.snapshot();
-
-    ui->patientList->clear();
-
-    for(const Patient& patient : snapshot.patients){
-        const QString label = QString("%1 - %2")
-                                  .arg(patient.getId())
-                                  .arg(QString::fromStdString(patient.getName()));
-
-        auto* item = new QListWidgetItem(label);
-        item->setData(Qt::UserRole, patient.getId());
-
-        ui->patientList->addItem(item);
-    }
-
-    filterPatients(ui->searchPatientEdit->text());
+    patientTableModel_->setPatients(patientManager_.snapshot().patients);
+    patientProxyModel_->setFilterFixedString(ui->searchPatientEdit->text().trimmed());
 }
 
 void MainWindow::on_aboutButton_clicked()
@@ -76,26 +72,17 @@ void MainWindow::on_addPatientButton_clicked()
     const QString name = ui->patientNameEdit->text().trimmed();
 
     try{
-        const Patient patient = patientManager_.addPatient(name.toStdString());
+        patientManager_.addPatient(name.toStdString());
 
-        const QString label = QString("%1 - %2")
-                                  .arg(patient.getId())
-                                  .arg(QString::fromStdString((patient.getName())));
-
-        auto* item = new QListWidgetItem(label);
-        item->setData(Qt::UserRole, patient.getId());
-
-        ui->patientList->addItem(item);
+        refreshPatientsList();
 
         ui->patientNameEdit->clear();
         ui->patientNameEdit->setFocus();
-
-        filterPatients(ui->searchPatientEdit->text());
     }
     catch (const std::exception& error){
         QMessageBox::warning(
             this,
-            "Date incomplete",
+            "Eroare la adaugare",
             QString::fromUtf8(error.what())
         );
     }
@@ -105,9 +92,9 @@ void MainWindow::on_addPatientButton_clicked()
 
 void MainWindow::on_deletePatientButton_clicked()
 {
-    auto* item = ui->patientList->currentItem();
+    const auto id = selectedPatientId();
 
-    if(!item){
+    if(!id.has_value()){
         QMessageBox::warning(
             this,
             "Selectie necesara",
@@ -116,27 +103,24 @@ void MainWindow::on_deletePatientButton_clicked()
         return;
     }
 
-    const int id = item->data(Qt::UserRole).toInt();
-
-    if(!patientManager_.removePatient(id)){
+    if(!patientManager_.removePatient(*id)){
         QMessageBox::warning(
             this,
-            "Eroare",
+            "Pacient inexistent",
             "Pacientul selectat nu a fost gasit."
         );
         return;
     }
 
-    const int row = ui->patientList->row(item);
-    delete ui->patientList->takeItem(row);
+    refreshPatientsList();
 }
 
 
 void MainWindow::on_editPatientButton_clicked()
 {
-    auto* item = ui->patientList->currentItem();
+    const auto id = selectedPatientId();
 
-    if(!item){
+    if(!id.has_value()){
         QMessageBox::warning(
             this,
             "Selectie necesara",
@@ -145,15 +129,13 @@ void MainWindow::on_editPatientButton_clicked()
         return;
     }
 
-    const int id = item->data(Qt::UserRole).toInt();
+    const auto patient = patientManager_.findPatient(*id);
 
-    const auto patient = patientManager_.findPatient(id);
-
-    if(!patient){
+    if(!patient.has_value()){
         QMessageBox::warning(
             this,
-            "Selectie necesara",
-            "Selecteaza un pacient."
+            "Pacient inexistent",
+            "Pacientul selectat nu mai exista."
         );
         return;
     }
@@ -174,7 +156,7 @@ void MainWindow::on_editPatientButton_clicked()
     }
 
     try{
-        if(!patientManager_.renamePatient(id, name.toStdString())){
+        if(!patientManager_.renamePatient(*id, name.toStdString())){
             QMessageBox::warning(
                 this,
                 "Eroare",
@@ -182,15 +164,10 @@ void MainWindow::on_editPatientButton_clicked()
                 );
             return;
         }
-        item->setText(
-            QString("%1 - %2")
-                .arg(id)
-                .arg(name)
-            );
 
-        filterPatients(ui->searchPatientEdit->text());
+        refreshPatientsList();
     }
-    catch (const std::invalid_argument& error){
+    catch (const std::exception& error){
         QMessageBox::warning(
             this,
             "Date incomplete",
@@ -202,7 +179,7 @@ void MainWindow::on_editPatientButton_clicked()
 
 void MainWindow::on_searchPatientEdit_textChanged(const QString& text)
 {
-    filterPatients(text);
+    patientProxyModel_->setFilterFixedString(text.trimmed());
 }
 
 
@@ -277,4 +254,23 @@ void MainWindow::on_loadPatientsButton_clicked()
             "Eroare la incarcare",
             QString::fromUtf8(error.what()));
     }
+}
+
+std::optional<int> MainWindow::selectedPatientId() const{
+    const QModelIndexList selectedRows = ui->patientsTable->selectionModel()->selectedRows();
+
+    if(selectedRows.isEmpty()){
+        return std::nullopt;
+    }
+
+    const QModelIndex index = selectedRows.first();
+
+    bool valid = false;
+    const int id = index.data(Qt::UserRole).toInt(&valid);
+
+    if(!valid){
+        return std::nullopt;
+    }
+
+    return id;
 }

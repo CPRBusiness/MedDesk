@@ -5,11 +5,16 @@
 #include <QMainWindow>
 #include <QString>
 
+#include<optional>
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
 }
 QT_END_NAMESPACE
+
+class PatientTableModel;
+class QSortFilterProxyModel;
 
 class MainWindow : public QMainWindow
 {
@@ -37,8 +42,12 @@ private slots:
 private:
     Ui::MainWindow *ui;
     PatientManager patientManager_;
+    PatientTableModel* patientTableModel_ = nullptr;
+    QSortFilterProxyModel* patientProxyModel_ = nullptr;
 
-    void filterPatients(const QString& text);
+
     void refreshPatientsList();
+
+    std::optional<int> selectedPatientId() const;
 };
 #endif // MAINWINDOW_H
