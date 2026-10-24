@@ -52,7 +52,8 @@ private:
 
     std::optional<int> selectedPatientId() const;
     void setUnsavedChanges(bool modified);
-    bool confirmDiscardChanges();
+    bool confirmPendingChanges();
+    bool savePatients();
 
 protected:
     void closeEvent(QCloseEvent* event) override;

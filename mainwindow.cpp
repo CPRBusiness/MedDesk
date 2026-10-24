@@ -193,32 +193,7 @@ void MainWindow::on_searchPatientEdit_textChanged(const QString& text)
 
 void MainWindow::on_savePatientsButton_clicked()
 {
-    const QString filePath = QFileDialog::getSaveFileName(
-        this,
-        "Salveaza pacientii",
-        "patients.json",
-        "Fisiere JSON (*.json)");
-
-    if(filePath.isEmpty()){
-        return;
-    }
-    try{
-        const PatientSnapshot snapshot = patientManager_.snapshot();
-
-        PatientStorage::save(filePath, snapshot);
-        setUnsavedChanges(false);
-
-        QMessageBox::information(
-            this,
-            "Salvare reusita",
-            "Pacientii au fost salvati.");
-    }
-    catch (const std::exception& error){
-        QMessageBox::critical(
-            this,
-            "Eroare la salvare",
-            QString::fromUtf8(error.what()));
-    }
+    savePatients();
 }
 
 
@@ -234,7 +209,7 @@ void MainWindow::on_loadPatientsButton_clicked()
         return;
     }
 
-    if (!confirmDiscardChanges())
+    if (!confirmPendingChanges())
     {
         return;
     }
@@ -288,7 +263,7 @@ void MainWindow::setUnsavedChanges(bool modified)
         QString("MedDesk - Gestionare pacienti%1").arg(marker));
 }
 
-bool MainWindow::confirmDiscardChanges()
+bool MainWindow::confirmPendingChanges()
 {
     if (!hasUnsavedChanges_)
     {
@@ -300,20 +275,71 @@ bool MainWindow::confirmDiscardChanges()
         "Modificari nesalvate",
         "Exista modificari nesalvate. "
         "Continui fara sa le salvezi?",
-        QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
         QMessageBox::Cancel);
 
-    return answer == QMessageBox::Discard;
+    switch (answer)
+    {
+    case QMessageBox::Save:
+        return savePatients();
+
+    case QMessageBox::Discard:
+        return true;
+
+    case QMessageBox::Cancel:
+    default:
+        return false;
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (confirmDiscardChanges())
+    if (confirmPendingChanges())
     {
         event->accept();
     }
     else
     {
         event->ignore();
+    }
+}
+
+bool MainWindow::savePatients()
+{
+    const QString filePath = QFileDialog::getSaveFileName(
+        this,
+        "Salveaza pacientii",
+        "patients.json",
+        "Fisiere JSON (*.json)");
+
+    if (filePath.isEmpty())
+    {
+        return false;
+    }
+
+    try
+    {
+        const PatientSnapshot snapshot =
+            patientManager_.snapshot();
+
+        PatientStorage::save(filePath, snapshot);
+
+        setUnsavedChanges(false);
+
+        QMessageBox::information(
+            this,
+            "Salvare reusita",
+            "Pacientii au fost salvati.");
+
+        return true;
+    }
+    catch (const std::exception& error)
+    {
+        QMessageBox::critical(
+            this,
+            "Eroare la salvare",
+            QString::fromUtf8(error.what()));
+
+        return false;
     }
 }
