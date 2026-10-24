@@ -42,6 +42,8 @@ private slots:
 
     void on_savePatientsAsButton_clicked();
 
+    void on_newPatientsButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     PatientManager patientManager_;

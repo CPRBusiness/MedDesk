@@ -15,6 +15,7 @@
 #include <QItemSelectionModel>
 #include <QSortFilterProxyModel>
 #include <QCloseEvent>
+#include <QKeySequence>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -47,6 +48,27 @@ MainWindow::MainWindow(QWidget *parent)
     refreshPatientsList();
 
     setUnsavedChanges(false);
+
+    ui->newPatientsButton->setShortcut(
+        QKeySequence(QKeySequence::New));
+    ui->newPatientsButton->setToolTip(
+        "Lista noua (Ctrl+N)");
+
+    ui->loadPatientsButton->setShortcut(
+        QKeySequence(QKeySequence::Open));
+    ui->loadPatientsButton->setToolTip(
+        "Incarca pacientii (Ctrl+O)");
+
+    ui->savePatientsButton->setShortcut(
+        QKeySequence(QKeySequence::Save));
+    ui->savePatientsButton->setToolTip(
+        "Salveaza pacientii (Ctrl+S)");
+
+    ui->savePatientsAsButton->setShortcut(
+        QKeySequence(QKeySequence::SaveAs));
+    ui->savePatientsAsButton->setToolTip(
+        "Salveaza ca... (Ctrl+Shift+S)");
+
 }
 
 MainWindow::~MainWindow()
@@ -373,3 +395,23 @@ void MainWindow::on_savePatientsAsButton_clicked()
 {
     savePatientsAs();
 }
+void MainWindow::on_newPatientsButton_clicked()
+{
+    if (!confirmPendingChanges())
+    {
+        return;
+    }
+
+    patientManager_.restore(PatientSnapshot{});
+
+    currentFilePath_.clear();
+
+    ui->patientNameEdit->clear();
+    ui->searchPatientEdit->clear();
+
+    refreshPatientsList();
+    setUnsavedChanges(false);
+
+    ui->patientNameEdit->setFocus();
+}
+
